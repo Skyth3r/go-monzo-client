@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/99designs/keyring"
 	"github.com/google/uuid"
 )
 
@@ -172,63 +173,83 @@ func exchangeCodeForToken(c *MonzoClient) error {
 	return nil
 }
 
-// func refreshAccessToken(c *MonzoClient) error {
-// 	params := map[string]string{
-// 		"grant_type":    refreshGrant,
-// 		"client_id":     c.clientID,
-// 		"client_secret": c.clientSecret,
-// 		"refresh_token": c.refreshToken,
-// 	}
+func refreshToken(c *MonzoClient) error {
 
-// 	values := url.Values{}
-// 	for key, value := range params {
-// 		values.Add(key, value)
-// 	}
+	fmt.Println("Refreshing access token ♻️")
 
-// 	encodedValues := values.Encode()
+	params := map[string]string{
+		"grant_type":    refreshGrant,
+		"client_id":     c.clientID,
+		"client_secret": c.clientSecret,
+		"refresh_token": c.refreshToken,
+	}
 
-// 	req, err := http.NewRequest("POST", c.endpoints["TokenURL"], strings.NewReader(encodedValues))
-// 	if err != nil {
-// 		return err
-// 	}
+	values := url.Values{}
+	for key, value := range params {
+		values.Add(key, value)
+	}
 
-// 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	encodedValues := values.Encode()
 
-// 	rsp, err := c.Do(req)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	defer rsp.Body.Close()
+	req, err := http.NewRequest("POST", c.endpoints["TokenURL"], strings.NewReader(encodedValues))
+	if err != nil {
+		return err
+	}
 
-// 	if rsp.StatusCode != http.StatusOK {
-// 		return fmt.Errorf("unexpected status code: %d", rsp.StatusCode)
-// 	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-// 	rspJson := map[string]interface{}{}
-// 	err = json.NewDecoder(rsp.Body).Decode(&rspJson)
-// 	if err != nil {
-// 		return err
-// 	}
+	rsp, err := c.Do(req)
+	if err != nil {
+		return err
+	}
+	defer rsp.Body.Close()
 
-// 	accessToken, ok := rspJson["access_token"].(string)
-// 	if !ok {
-// 		return fmt.Errorf("cannot find access token in response")
-// 	}
+	if rsp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code: %d", rsp.StatusCode)
+	}
 
-// 	refreshToken, ok := rspJson["refresh_token"].(string)
-// 	if !ok {
-// 		return fmt.Errorf("cannot find refresh token in response")
-// 	}
+	rspJson := map[string]interface{}{}
+	err = json.NewDecoder(rsp.Body).Decode(&rspJson)
+	if err != nil {
+		return err
+	}
 
-// 	_, ok = rspJson["user_id"].(string)
-// 	if !ok {
-// 		return fmt.Errorf("cannot find user ID in response")
-// 	}
+	accessToken, ok := rspJson["access_token"].(string)
+	if !ok {
+		return fmt.Errorf("cannot find access token in response")
+	}
 
-// 	c.accessToken = accessToken
-// 	c.refreshToken = refreshToken
+	refreshToken, ok := rspJson["refresh_token"].(string)
+	if !ok {
+		return fmt.Errorf("cannot find refresh token in response")
+	}
 
-// 	fmt.Println("Access token refreshed ♻️")
+	_, ok = rspJson["user_id"].(string)
+	if !ok {
+		return fmt.Errorf("cannot find user ID in response")
+	}
 
-// 	return nil
-// }
+	c.accessToken = accessToken
+	c.refreshToken = refreshToken
+
+	// open the keyring and save the new tokens
+	ring, err := keyring.Open(keyring.Config{
+		ServiceName: "monzo-access-token",
+	})
+	if err != nil {
+		return err
+	}
+
+	// join the tokens and save them to the keychain
+	tokens := client.accessToken + "::" + client.refreshToken
+	if err := ring.Set(keyring.Item{
+		Key:  "tokens",
+		Data: []byte(tokens),
+	}); err != nil {
+		return fmt.Errorf("failed to set tokens in keychain: %w", err)
+	}
+
+	fmt.Println("Access token refreshed ♻️")
+
+	return nil
+}
