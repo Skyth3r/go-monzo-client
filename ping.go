@@ -23,14 +23,6 @@ func pingTest(c *MonzoClient) error {
 	}
 	defer rsp.Body.Close()
 
-	// if http status code is 401, refresh the token
-	if rsp.StatusCode == http.StatusUnauthorized {
-		err = refreshToken(c)
-		if err != nil {
-			return err
-		}
-	}
-
 	if rsp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code: %d", rsp.StatusCode)
 	}

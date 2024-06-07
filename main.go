@@ -38,8 +38,10 @@ func run() error {
 			}
 			tokens := client.accessToken + "::" + client.refreshToken
 			if err := ring.Set(keyring.Item{
-				Key:  "tokens",
-				Data: []byte(tokens),
+				Key:         "tokens",
+				Data:        []byte(tokens),
+				Label:       "Monzo Access Token",
+				Description: "Access and refresh tokens for the Monzo API",
 			}); err != nil {
 				return fmt.Errorf("failed to set tokens in keychain: %w", err)
 			}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -49,5 +50,21 @@ func (c *MonzoClient) Do(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// If the response status code is 401, refresh the token and retry the request
+	if rsp.StatusCode == http.StatusUnauthorized {
+		if err := refreshToken(c); err != nil {
+			return nil, err
+		}
+
+		// Update the Authorization header with the new access token.
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.accessToken))
+
+		rsp, err = c.httpClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return rsp, nil
 }
